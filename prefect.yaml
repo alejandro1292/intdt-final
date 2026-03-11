@@ -1,0 +1,31 @@
+name: final_final
+prefect-version: 2.14.0
+
+build:
+push:
+
+deployments:
+  - name: "# Importacion-Transformacion-Metabase"
+    entrypoint: "prefect_flows/flow.py:airbyte_dbt_metabase_pipeline"
+    work_pool:
+      name: "default-agent-pool"
+
+  - name: "Airbyte: Ejecutar Importacion MongoDB"
+    entrypoint: "prefect_flows/flow.py:airbyte_only_mongo_flow"
+    work_pool:
+      name: "default-agent-pool"
+
+  - name: "Airbyte: Ejecutar Importacion BigQuery"
+    entrypoint: "prefect_flows/flow.py:airbyte_only_bq_flow"
+    work_pool:
+      name: "default-agent-pool"
+
+  - name: "DBT: Ejecutar Transformacion"
+    entrypoint: "prefect_flows/flow.py:dbt_only_flow"
+    work_pool:
+      name: "default-agent-pool"
+
+  - name: "Metabase: Ejecutar Actualizacion"
+    entrypoint: "prefect_flows/flow.py:metabase_refresh_flow"
+    work_pool:
+      name: "default-agent-pool"

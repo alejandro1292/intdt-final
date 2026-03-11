@@ -1,0 +1,111 @@
+services:
+  # --- Base de datos para el servidor de Prefect ---
+  # Se utiliza PostgreSQL para almacenar el estado y la configuración de Prefect.
+  database:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: prefect
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data-pipeline-net
+
+  # --- Servidor de Prefect ---
+  # Proporciona la interfaz de usuario y la API para gestionar los flujos.
+  prefect-server:
+    image: prefecthq/prefect:2-latest
+    restart: always
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_UI_API_URL: http://localhost:4200/api
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:password@database:5432/prefect
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:4200/api/health\").read()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "4200:4200"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - data-pipeline-net
+
+  # --- Worker de Prefect ---
+  # Ejecuta las tareas de los flujos de trabajo programados.
+  prefect-worker:
+    image: prefecthq/prefect:2-latest
+    restart: always
+    command: >
+      bash -c "pip install requests python-dotenv dbt-core==1.8.9 dbt-duckdb==1.8.4 duckdb==1.1.2 && 
+               prefect worker start --pool default-agent-pool"
+    volumes:
+      - .:/usr/app
+    working_dir: /usr/app
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - data-pipeline-net
+
+    # --- Constructor de Prefect ---
+  # Automatiza el registro de los despliegues de flujos en el servidor.
+  prefect-deployer:
+    image: prefecthq/prefect:2-latest
+    volumes:
+      - .:/usr/app
+    working_dir: /usr/app
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    command: >
+      bash -c "pip install python-dotenv requests && 
+      prefect work-pool create --type process default-agent-pool || true &&
+      prefect deploy --all"
+    networks:
+      - data-pipeline-net
+  
+  # --- Metabase (con Driver MotherDuck) ---
+  # Plataforma de visualización para analizar los datos transformados.
+  metabase:
+    build:
+      context: .
+      dockerfile: Dockerfile.metabase
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: h2
+      MB_PLUGINS_DIR: /plugins
+    networks:
+      - data-pipeline-net
+
+  # --- Contenedor de dbt ---
+  # Actúa como ejecutor de transformaciones SQL sobre DuckDB/MotherDuck.
+  # OBS: En producción, esto suele ser invocado por Prefect directamente.
+  dbt:
+    image: python:3.11-slim
+    volumes:
+      - ./dbt_project:/usr/app/dbt
+      - ./.env:/usr/app/.env
+    working_dir: /usr/app/dbt
+    environment:
+      - MOTHERDUCK_TOKEN=${MOTHERDUCK_TOKEN}
+    command: tail -f /dev/null # Mantiene el contenedor activo para ejecuciones interactivas
+    networks:
+      - data-pipeline-net
+
+networks:
+  data-pipeline-net:
+    driver: bridge

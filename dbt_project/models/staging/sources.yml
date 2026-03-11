@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: airbyte
+    # En MotherDuck, el catálogo es la base de datos (intdt) y el esquema es 'main'.
+    database: intdt
+    schema: main
+    tables:
+      - name: data
+      - name: llm
