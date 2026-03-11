@@ -25,6 +25,11 @@ deployments:
     work_pool:
       name: "default-agent-pool"
 
+  - name: "DBT: Ejecutar Test de Calidad de Datos"
+    entrypoint: "prefect_flows/flow.py:dbt_quality_flow"
+    work_pool:
+      name: "default-agent-pool"
+
   - name: "Metabase: Ejecutar Actualizacion"
     entrypoint: "prefect_flows/flow.py:metabase_refresh_flow"
     work_pool:

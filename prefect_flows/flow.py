@@ -91,23 +91,47 @@ def trigger_airbyte_sync(connection_id: str, access_token: str):
 @task
 def run_dbt_build():
     logger = get_run_logger()
-    logger.info("Ejecutando dbt build para el proyecto en MotherDuck...")
+    logger.info("Instalando dependencias de dbt y ejecutando build...")
     
-    # Nota: Se asume que dbt está instalado en el entorno donde se ejecuta el flujo
-    # En un escenario real con Docker, Prefect podría activar un trabajo dentro del dbt-container
-    # Usando 'dbt build' como comando de shell:
     dbt_project_path = "/usr/app/dbt_project"
-    # Aseguramos que dbt use el directorio del proyecto para buscar el perfil si no se especifica --profiles-dir
-    dbt_command = f"cd {dbt_project_path} && dbt build --profiles-dir ."
     
-    res = subprocess.run(dbt_command, shell=True, capture_output=True, text=True)
-    if res.returncode != 0:
-        logger.error(f"Error en dbt build: \nSalida (stdout): {res.stdout}\nError (stderr): {res.stderr}")
-        raise Exception("Fallo en dbt build")
+    commands = [
+        f"cd {dbt_project_path} && dbt deps --profiles-dir .",
+        f"cd {dbt_project_path} && dbt build --profiles-dir ."
+    ]
     
-    logger.info(f"dbt build completado con éxito! Salida: {res.stdout}")
+    for cmd in commands:
+        logger.info(f"Ejecutando: {cmd}")
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error(f"Error en comando dbt build: {cmd}\nSalida: {res.stdout}\nError: {res.stderr}")
+            raise Exception(f"Fallo en ejecución de dbt build: {cmd}")
+        logger.info(f"Éxito build: {res.stdout}")
 
-# --- Tarea 3: Actualizar Dashboard de Metabase (Visualización) ---
+# --- Tarea 3: Ejecutar pruebas de calidad dbt (dbt-expectations) ---
+@task
+def run_dbt_quality_tests():
+    logger = get_run_logger()
+    logger.info("Iniciando pruebas de calidad de datos (dbt-expectations)...")
+    
+    dbt_project_path = "/usr/app/dbt_project"
+    
+    # Aseguramos deps por si se corre de forma independiente
+    # Luego ejecutamos los tests específicamente de las fuentes
+    commands = [
+        f"cd {dbt_project_path} && dbt deps --profiles-dir .",
+        f"cd {dbt_project_path} && dbt test --select source:airbyte --profiles-dir ."
+    ]
+    
+    for cmd in commands:
+        logger.info(f"Ejecutando: {cmd}")
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error(f"Error en pruebas de calidad: {cmd}\nSalida: {res.stdout}\nError: {res.stderr}")
+            raise Exception(f"Fallo en los tests de calidad: {cmd}")
+        logger.info(f"Éxito tests: {res.stdout}")
+
+# --- Tarea 4: Actualizar Dashboard de Metabase (Visualización) ---
 @task(retries=2)
 def refresh_metabase():
     logger = get_run_logger()
@@ -162,11 +186,13 @@ def airbyte_dbt_metabase_pipeline():
     logger.info("Airbyte MongoDB a MotherDuck:")
     trigger_airbyte_sync(AIRBYTE_MONGO_MD_CONN_ID, access_token)
     
+    # Paso 2: Calidad de Datos (Independiente)
+    run_dbt_quality_tests()
 
-    # Paso 2: Transformación (dbt)
+    # Paso 3: Transformación (dbt)
     run_dbt_build()
 
-    # Paso 3: Visualización (Metabase)
+    # Paso 4: Visualización (Metabase)
     refresh_metabase()
 
     logger.info("El flujo de orquestación ha finalizado con éxito!")
@@ -178,6 +204,14 @@ def dbt_only_flow():
     logger.info("Iniciando ejecución independiente de dbt...")
     run_dbt_build()
     logger.info("Transformación dbt finalizada!")
+
+# --- Nuevo flujo: Solo ejecución de Calidad de Datos ---
+@flow(name="Proceso Independiente de Calidad de Datos")
+def dbt_quality_flow():
+    logger = get_run_logger()
+    logger.info("Iniciando auditoría de calidad de datos...")
+    run_dbt_quality_tests()
+    logger.info("Pruebas de calidad finalizadas!")
 
 # --- Nuevo flujo: Solo importacion de Airbyte ---
 @flow(name="Proceso Independiente de Airbyte: MongoDB a MotherDuck")

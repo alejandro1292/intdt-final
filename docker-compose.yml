@@ -44,7 +44,7 @@ services:
     image: prefecthq/prefect:2-latest
     restart: always
     command: >
-      bash -c "pip install requests python-dotenv dbt-core==1.8.9 dbt-duckdb==1.8.4 duckdb==1.1.2 && 
+      bash -c "pip install requests python-dotenv dbt-core==1.8.9 dbt-duckdb==1.8.4 duckdb==1.1.2 gitpython && 
                prefect worker start --pool default-agent-pool"
     volumes:
       - .:/usr/app
