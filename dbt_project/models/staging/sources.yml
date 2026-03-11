@@ -7,4 +7,29 @@ sources:
     schema: main
     tables:
       - name: data
+        columns:
+          - name: job_id
+            tests:
+              - dbt_expectations.expect_column_to_exist
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+          - name: salary_after_usd
+            tests:
+              - dbt_expectations.expect_column_values_to_be_of_type:
+                  column_type: DECIMAL(38,9)
+          - name: country
+            tests:
+              - dbt_expectations.expect_column_values_to_not_be_null
+
       - name: llm
+        columns:
+          - name: model
+            tests:
+              - dbt_expectations.expect_column_value_lengths_to_be_between:
+                  min_value: 1
+          - name: release_date
+            tests:
+              - dbt_expectations.expect_column_values_to_be_of_type:
+                  column_type: VARCHAR # Validamos que al menos sea string antes de parsear
+
+

@@ -19,6 +19,7 @@ clean-targets:
 models:
   dbt_project:
     staging:
-      materialized: view
+      +materialized: view  # Capa de limpieza rápida
     marts:
-      materialized: table
+      +materialized: table # Persistencia para BI
+
