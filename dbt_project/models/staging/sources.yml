@@ -6,30 +6,30 @@ sources:
     database: intdt
     schema: main
     tables:
-      - name: data
+      - name: proyectos_bid
         columns:
-          - name: job_id
+          - name: oper_num
             tests:
-              - dbt_expectations.expect_column_to_exist
-              - dbt_expectations.expect_column_values_to_be_between:
-                  min_value: 0
-          - name: salary_after_usd
+              - unique
+              - not_null
+          - name: cntry_cd
             tests:
-              - dbt_expectations.expect_column_values_to_be_of_type:
-                  column_type: DECIMAL(38,9)
+              - not_null
+          - name: totl_cost_orig
+
+      - name: desempleo
+        columns:
           - name: country
             tests:
-              - dbt_expectations.expect_column_values_to_not_be_null
+              - not_null
+          - name: value
 
-      - name: llm
+      - name: cpi_indice
         columns:
-          - name: model
+          - name: country_name
             tests:
-              - dbt_expectations.expect_column_value_lengths_to_be_between:
-                  min_value: 1
-          - name: release_date
-            tests:
-              - dbt_expectations.expect_column_values_to_be_of_type:
-                  column_type: VARCHAR # Validamos que al menos sea string antes de parsear
+              - not_null
+          - name: value
+
 
 

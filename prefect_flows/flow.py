@@ -18,9 +18,12 @@ AIRBYTE_API_URL = "https://api.airbyte.com/v1" # URL de la cloud de Airbyte
 # --- Configuración (Valores extraídos de .env) ---
 AIRBYTE_CLIENT_ID = os.getenv("AIRBYTE_CLIENT_ID")
 AIRBYTE_CLIENT_SECRET = os.getenv("AIRBYTE_CLIENT_SECRET")
+# Nuevas conexiones
 AIRBYTE_MONGO_MD_CONN_ID = os.getenv("AIRBYTE_MONGO_MD_CONN_ID")
 AIRBYTE_BQ_MD_CONN_ID = os.getenv("AIRBYTE_BQ_MD_CONN_ID")
+
 METABASE_URL=os.getenv("METABASE_URL")
+
 METABASE_DASHBOARD_ID=os.getenv("METABASE_DASHBOARD_ID")
 METABASE_SESSION_TOKEN = os.getenv("METABASE_SESSION_TOKEN")
 
@@ -169,77 +172,66 @@ def refresh_metabase():
     else:
         logger.error(f"Falla en sincronización de Metabase: {resp.status_code} - {resp.text}")
 
-# --- Flujo principal (Flow): Orquestación completa ---
-@flow(name="Pipeline Completo: Airbyte DBT Metabase")
-def airbyte_dbt_metabase_pipeline():
+# --- Flujo principal (Flow): Orquestación completa E2E ---
+@flow(name="# Pipeline Completo: Importación, Calidad, Transformación y Visualización")
+def financial_pipeline():
     logger = get_run_logger()
-    logger.info("Iniciando orquestación de extremo a extremo (E2E)...")
+    logger.info("Iniciando orquestación completa del pipeline...")
 
-    # Obtener token OAuth2 dinámico
+    # Paso 1: Ingesta modularizada
+    airbyte_import_mongo_flow()
+    airbyte_import_bq_flow()
+    
+    # Paso 2: Auditoría de Calidad
+    dbt_quality_flow()
+
+    # Paso 3: Transformación
+    dbt_build_flow()
+
+    # Paso 4: Visualización
+    metabase_refresh_flow()
+
+    logger.info("Pipeline Completo finalizado!")
+
+# --- Flujos Independientes ---
+
+@flow(name="Airbyte: Importar MongoDB")
+def airbyte_import_mongo_flow():
+    logger = get_run_logger()
+    logger.info("Iniciando importación MongoDB...")
     access_token = get_airbyte_access_token()
 
+    # Usamos la conexión de BID para MongoDB
+    trigger_airbyte_sync(AIRBYTE_MONGO_MD_CONN_ID, access_token) 
 
-    # Paso 1: Ingesta (Airbyte)
-    logger.info("Airbyte BigQuery a MotherDuck:")
+@flow(name="Airbyte: Importar BigQuery")
+def airbyte_import_bq_flow():
+    logger = get_run_logger()
+    logger.info("Iniciando importación BigQuery...")
+    access_token = get_airbyte_access_token()
+
+    # Usamos la conexión de Desempleo/CPI para BQ
     trigger_airbyte_sync(AIRBYTE_BQ_MD_CONN_ID, access_token)
 
-    logger.info("Airbyte MongoDB a MotherDuck:")
-    trigger_airbyte_sync(AIRBYTE_MONGO_MD_CONN_ID, access_token)
-    
-    # Paso 2: Calidad de Datos (Independiente)
-    run_dbt_quality_tests()
-
-    # Paso 3: Transformación (dbt)
-    run_dbt_build()
-
-    # Paso 4: Visualización (Metabase)
-    refresh_metabase()
-
-    logger.info("El flujo de orquestación ha finalizado con éxito!")
-
-# --- Nuevo flujo: Solo ejecución de dbt ---
-@flow(name="Proceso Independiente de dbt")
-def dbt_only_flow():
+@flow(name="DBT: Ejecutar Transformacion")
+def dbt_build_flow():
     logger = get_run_logger()
-    logger.info("Iniciando ejecución independiente de dbt...")
+    logger.info("Iniciando transformación de datos (dbt build)...")
     run_dbt_build()
-    logger.info("Transformación dbt finalizada!")
 
-# --- Nuevo flujo: Solo ejecución de Calidad de Datos ---
-@flow(name="Proceso Independiente de Calidad de Datos")
+@flow(name="DBT: Auditoria de Calidad")
 def dbt_quality_flow():
     logger = get_run_logger()
-    logger.info("Iniciando auditoría de calidad de datos...")
+    logger.info("Iniciando auditoría de calidad de datos (dbt test)...")
     run_dbt_quality_tests()
-    logger.info("Pruebas de calidad finalizadas!")
 
-# --- Nuevo flujo: Solo importacion de Airbyte ---
-@flow(name="Proceso Independiente de Airbyte: MongoDB a MotherDuck")
-def airbyte_only_mongo_flow():
-    logger = get_run_logger()
-    logger.info("Iniciando importación de Airbyte independiente...")
-    access_token = get_airbyte_access_token()
-    trigger_airbyte_sync(AIRBYTE_MONGO_MD_CONN_ID, access_token)
-    logger.info("Importación de Airbyte finalizada!")
-    
-# --- Nuevo flujo: Solo importacion de Airbyte ---
-@flow(name="Proceso Independiente de Airbyte: BigQuery a MotherDuck")
-def airbyte_only_bq_flow():
-    logger = get_run_logger()
-    logger.info("Iniciando importación de Airbyte independiente...")
-    access_token = get_airbyte_access_token()
-    trigger_airbyte_sync(AIRBYTE_BQ_MD_CONN_ID, access_token)
-    logger.info("Transformación dbt finalizada!")
-
-    # No necesitamos ejecutar dbt para BigQuery
-
-# --- Nuevo flujo: Solo actualización de Metabase ---
-@flow(name="Proceso Independiente de Metabase")
+@flow(name="Metabase: Actualizar Visualizacion")
 def metabase_refresh_flow():
     logger = get_run_logger()
-    logger.info("Iniciando actualización independiente de Metabase...")
+    logger.info("Iniciando actualización de Metabase...")
     refresh_metabase()
-    logger.info("Actualización de Metabase finalizada!")
 
 if __name__ == "__main__":
-    airbyte_dbt_metabase_pipeline()
+    financial_pipeline()
+
+

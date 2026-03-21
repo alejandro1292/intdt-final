@@ -5,32 +5,34 @@ build:
 push:
 
 deployments:
-  - name: "# Importacion-Transformacion-Metabase"
-    entrypoint: "prefect_flows/flow.py:airbyte_dbt_metabase_pipeline"
+  - name: "# Pipeline E2E: Financiero"
+    entrypoint: "prefect_flows/flow.py:financial_pipeline"
     work_pool:
       name: "default-agent-pool"
 
-  - name: "Airbyte: Ejecutar Importacion MongoDB"
-    entrypoint: "prefect_flows/flow.py:airbyte_only_mongo_flow"
+  - name: "Airbyte: Importar MongoDB"
+    entrypoint: "prefect_flows/flow.py:airbyte_import_mongo_flow"
     work_pool:
       name: "default-agent-pool"
 
-  - name: "Airbyte: Ejecutar Importacion BigQuery"
-    entrypoint: "prefect_flows/flow.py:airbyte_only_bq_flow"
+  - name: "Airbyte: Importar BigQuery"
+    entrypoint: "prefect_flows/flow.py:airbyte_import_bq_flow"
     work_pool:
       name: "default-agent-pool"
 
   - name: "DBT: Ejecutar Transformacion"
-    entrypoint: "prefect_flows/flow.py:dbt_only_flow"
+    entrypoint: "prefect_flows/flow.py:dbt_build_flow"
     work_pool:
       name: "default-agent-pool"
 
-  - name: "DBT: Ejecutar Test de Calidad de Datos"
+  - name: "DBT: Auditoria de Calidad"
     entrypoint: "prefect_flows/flow.py:dbt_quality_flow"
     work_pool:
       name: "default-agent-pool"
 
-  - name: "Metabase: Ejecutar Actualizacion"
+  - name: "Metabase: Actualizar Visualizacion"
     entrypoint: "prefect_flows/flow.py:metabase_refresh_flow"
     work_pool:
       name: "default-agent-pool"
+
+

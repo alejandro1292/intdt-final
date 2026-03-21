@@ -1,145 +1,103 @@
-# Pipeline de Datos: Impacto de la IA en Empleos
+# Pipeline de Datos Financieros: Proyectos BID e Indicadores Económicos
 
-Este proyecto implementa un pipeline de datos E2E (End-to-End) para analizar el impacto de la Inteligencia Artificial en diversas industrias y roles laborales a nivel global.
+Este proyecto implementa un pipeline de datos E2E (End-to-End) para analizar la relación entre los proyectos de inversión del **Banco Interamericano de Desarrollo (BID)** y los indicadores económicos clave (Desempleo y CPI) a nivel global, facilitando la toma de decisiones financieras y el análisis de riesgo país.
 
 ## 🏗️ Arquitectura del Pipeline
 
-El flujo de datos sigue el siguiente recorrido:
-1.  **Origen de Datos:** API de Airbyte Cloud (conectada a fuentes externas).
-2.  **Ingesta (EL):** [Airbyte Cloud](https://airbyte.com/) sincroniza los datos directamente hacia **MotherDuck**.
-3.  **Almacenamiento (Data Warehouse):** [MotherDuck](https://motherduck.com/) (DuckDB en la nube) actúa como el repositorio central operando sobre el catálogo `intdt`.
-4.  **Orquestación:** [Prefect 2.x](https://www.prefect.io/) gestiona el flujo de trabajo, disparando la sincronización de Airbyte y las transformaciones de dbt.
-5.  **Transformación (T):** [dbt (data build tool)](https://www.getdbt.com/) con el adaptador `dbt-duckdb` realiza el modelado de datos (Staging -> Marts -> OBT).
-6.  **Visualización (BI):** [Metabase](https://www.metabase.com/) se conecta a MotherDuck para generar dashboards interactivos.
+El flujo de datos utiliza datos abiertos provenientes de [IADB Data](https://data.iadb.org/dataset/) y otras fuentes económicas:
+1.  **Origen de Datos:** Datos abiertos del BID (Proyectos), Desempleo y CPI Index (IPC).
+2.  **Ingesta (EL):** [Airbyte Cloud](https://airbyte.com/) sincroniza los datos desde fuentes externas hacia **MotherDuck**.
+3.  **Almacenamiento (Data Warehouse):** [MotherDuck](https://motherduck.com/) actúa como el repositorio central operando sobre el catálogo `intdt`.
+4.  **Orquestación:** [Prefect 2.x](https://www.prefect.io/) gestiona el flujo modularizado (Ingesta -> Auditoría -> Transformación -> BI).
+5.  **Transformación (T):** [dbt (data build tool)](https://www.getdbt.com/) realiza el modelado de datos con DuckDB, aplicando una capa de limpieza robusta contra datos ruidosos.
+6.  **Visualización (BI):** [Metabase](https://www.metabase.com/) genera dashboards de riesgo país e inversión con **persistencia de datos** habilitada mediante volúmenes de Docker.
 
 ## 🛠️ Herramientas y Tecnologías
 
 | Herramienta | Función |
 | :--- | :--- |
 | **Docker & Compose** | Contenerización de Prefect, Metabase y dbt. |
-| **Prefect** | Orquestación de tareas y monitoreo. |
-| **Airbyte Cloud** | Herramienta No-Code para ingesta de datos. |
-| **MotherDuck** | Motor SQL OLAP optimizado para DuckDB. |
-| **dbt-duckdb** | Transformaciones SQL modulares directamente en MotherDuck. |
-| **Metabase** | Visualización de datos y explorador SQL. |
-| **Portainer (Opcional)** | GUI para gestión de contenedores Docker (especialmente útil en Linux/macOS). |
-
-## 📋 Requisitos Previos
-
-- Docker y Docker Compose instalados.
-- Cuenta en **Airbyte Cloud** con un "Connection ID" configurado.
-- Cuenta en **MotherDuck** y un "Service Token".
-- Variables de entorno configuradas en un archivo `.env` o en el entorno del sistema.
-
-## 🔐 Variables de Entorno
-
-El sistema requiere las siguientes variables:
-
-```bash
-# Autenticación Airbyte (OAuth2)
-AIRBYTE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AIRBYTE_CLIENT_SECRET=Secret_De_Airbyte
-
-# IDs de Conexión Airbyte (deben coincidir con los pipelines de Cloud)
-AIRBYTE_MONGO_MD_CONN_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AIRBYTE_BQ_MD_CONN_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# MotherDuck / dbt
-MOTHERDUCK_TOKEN=Token_De_MotherDuck_Aqui
-MOTHERDUCK_DATABASE=intdt
-
-# Metabase
-METABASE_URL=http://localhost:3000
-METABASE_ADMIN_EMAIL=admin@ejemplo.com
-METABASE_ADMIN_PASSWORD=Password_Segura_123
-
-# Prefect
-PREFECT_API_URL=http://localhost:4200/api
-```
+| **Prefect** | Orquestación granular de flujos de trabajo. |
+| **Airbyte Cloud** | Ingesta desde fuentes externas hacia MotherDuck. |
+| **MotherDuck** | Almacenamiento OLAP basado en DuckDB. |
+| **dbt-duckdb** | Transformaciones SQL y validación de tipos de datos. |
+| **Metabase** | Visualización con base de datos H2 persistente. |
 
 ## 🚀 Instalación y Despliegue
 
 1.  **Clonar el repositorio.**
-2.  **Configurar el entorno:** Asegúrate de que `MOTHERDUCK_TOKEN` esté disponible para el contenedor de dbt y Metabase.
+2.  **Configurar el entorno:** Asegúrate de que `MOTHERDUCK_TOKEN` esté disponible en el archivo `.env`.
 3.  **Levantar el stack:**
     ```bash
     docker compose up -d --build
     ```
-4.  **Portainer (Opcional - RECOMENDADO en Linux/macOS):**
-    Si deseas gestionar tus contenedores visualmente:
+4.  **Ejecutar transformaciones dbt:**
     ```bash
-    docker volume create portainer_data
-    docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:2.21.0
+    cd dbt_project && dbt build --profiles-dir .
     ```
-    Accede en: `https://localhost:9443`
 
 5.  **Acceso a las herramientas:**
     - **Prefect UI:** `http://localhost:4200`
-    - **Metabase:** `http://localhost:3001`
+    - **Metabase:** `http://localhost:3000` (Configuraciones persistentes en el volumen `metabase-data`)
 
 ## 📊 Estructura de Datos (dbt)
 
-Los modelos se organizan en:
--   **Staging:** Limpieza inicial y renombrado de columnas desde la tabla `intdt.main.data`.
--   **Marts:** Dimensiones (`dim_jobs`, `dim_locations`) y hechos (`fact_ai_impact`).
--   **OBT (One Big Table):** Tabla final `obt_ai_impact` optimizada para el consumo en Metabase.
+El proyecto implementa una arquitectura de modelado en capas para garantizar la calidad del dato:
+
+### 1. Capa de Staging (Limpieza y Normalización)
+- **`stg_bid_projects`**: Normaliza proyectos del BID. Extrae `approval_year` de forma robusta y mapea códigos de país ISO2 a ISO3.
+- **`stg_cpi`**: Limpia el Índice de Precios al Consumidor. Filtra filas de cabecera (`ISO='ISO'`), normaliza decimales (`,` a `.`) y extrae años de 4 dígitos.
+- **`stg_unemployment`**: Procesa la tasa de desempleo con limpieza de tipos y filtrado de ruido textual.
+- **`stg_country_mapping`**: Tabla de referencia para unificar códigos de país del BID con estándares internacionales ISO3.
+
+### 2. Capa de Marts (Lógica de Negocio)
+- **`dim_countries`**: Dimensión maestra de países única por `country_code` (ISO3).
+- **`fact_financial_indicators`**: Unión (Full Outer Join) de CPI y Desempleo por País y Año, asegurando que no se pierdan datos dispersos.
+- **`mart_annual_inflation`**: Calcula la inflación porcentual anual utilizando funciones de ventana (`LAG`) sobre el histórico de CPI.
+- **`mart_country_financial_risk`**: Modelo central que correlaciona la inversión del BID con el riesgo país (Desempleo e Inflación) y genera un `simple_risk_index`.
+
+## 🛡️ Robustez y Calidad del Dato
+
+Se implementaron múltiples mecanismos para manejar datos ruidosos provenientes de Airbyte/CSV:
+- **Materialización como TABLA:** Los modelos de staging se materializan como tablas para romper la inferencia de tipos incorrecta de DuckDB sobre fuentes sucias.
+- **Regex Cleaning:** Extracción estricta de años (4 dígitos) para evitar que texto basura rompa las agregaciones temporales.
+- **Safe Casting:** Uso de `try_cast` y `replace` para manejar valores `'NULL'`, `'NA'` o formatos de moneda con comas.
+- **Normalización de Strings:** Todas las llaves de JOIN se procesan con `upper(trim(cast(... as varchar)))` para evitar fallos por espacios invisibles o diferencias de tipo.
+
 ## 📋 Esquemas de Origen (Airbyte)
 
 Para la configuración de las fuentes en Airbyte, se esperan las siguientes estructuras en MotherDuck:
 
-### 🍃 MongoDB (Data Principal)
-```sql
-CREATE TABLE "data"(
-  _id VARCHAR,
-  "year" DECIMAL(38,9),
-  job_id DECIMAL(38,9),
-  country VARCHAR,
-  industry VARCHAR,
-  job_role VARCHAR,
-  _ab_cdc_cursor BIGINT,
-  skill_gap_index DECIMAL(38,9),
-  salary_after_usd DECIMAL(38,9),
-  ai_adoption_level DECIMAL(38,9),
-  salary_before_usd DECIMAL(38,9),
-  _ab_cdc_deleted_at VARCHAR,
-  _ab_cdc_updated_at VARCHAR,
-  ai_replacement_score DECIMAL(38,9),
-  salary_change_percent DECIMAL(38,9),
-  wage_volatility_index DECIMAL(38,9),
-  ai_disruption_intensity DECIMAL(38,9),
-  automation_risk_percent DECIMAL(38,9),
-  automation_risk_category VARCHAR,
-  remote_feasibility_score DECIMAL(38,9),
-  reskilling_urgency_score DECIMAL(38,9),
-  skill_transition_pressure DECIMAL(38,9),
-  education_requirement_level DECIMAL(38,9),
-  skill_demand_growth_percent DECIMAL(38,9),
-  _airbyte_raw_id VARCHAR,
-  _airbyte_extracted_at TIMESTAMP,
-  _airbyte_meta JSON
-);
-```
+### 🍃 MongoDB (Proyectos BID)
+Basado en datos de [IADB Hub](https://data.iadb.org/ecosystem/iadb-project-data).
+La ingesta se realiza desde MongoDB hacia MotherDuck.
+- **Tabla:** `proyectos_bid`
+- **Campos clave:** `oper_num` (ID de proyecto), `cntry_cd` (ISO-2), `totl_cost_orig` (Monto total).
+- **Limpieza:** Se filtran cabeceras de texto y se normalizan los separadores de decimales.
 
-### 🔍 BigQuery (Datos LLM)
-```sql
-CREATE TABLE llm(
-  _id VARCHAR,
-  arch VARCHAR,
-  model VARCHAR,
-  notes VARCHAR,
-  ratio VARCHAR,
-  tokens VARCHAR,
-  alscore VARCHAR,
-  comapany VARCHAR,
-  parameters VARCHAR,
-  playground VARCHAR,
-  release_date VARCHAR,
-  training_dataset VARCHAR,
-  _airbyte_raw_id VARCHAR,
-  _airbyte_extracted_at TIMESTAMP,
-  _airbyte_meta JSON
-);
-```
+### 🔍 BigQuery (Indicadores Económicos)
+Datos económicos globales para análisis comparativo.
+- **Dataset Desempleo:** `desempleo` (Campos: `country_name`, `iso`, `value`, `period`).
+- **Dataset CPI:** `cpi_indice` (Campos: `country_name`, `iso`, `value`, `period`).
+- **Nota técnica:** Los valores numéricos se ingieren como `VARCHAR` para asegurar la compatibilidad con el origen y se transforman a `DOUBLE` en dbt.
+
+## 🧪 Pruebas de Calidad (Data Contracts)
+El pipeline incluye una etapa obligatoria de auditoría de datos en Prefect que ejecuta:
+- **Pruebas Genéricas:** `unique` y `not_null` sobre identificadores de proyectos y países.
+- **dbt-expectations:** Validaciones de tipo de columna en el origen para detectar cambios inesperados en el esquema de Airbyte.
+- **Limpieza Automática:** Filtrado de registros con basura de datos (ej. filas con texto "valor" en columnas numéricas).
+
+## 📊 Modelos de Datos dbt
+
+| Modelo | Nivel | Descripción |
+| :--- | :--- | :--- |
+| `stg_bid_projects` | Staging | Limpieza de proyectos BID, normalización de fechas y montos USD. |
+| `stg_unemployment` | Staging | Normalización de tasas de desempleo por país/año. |
+| `stg_cpi` | Staging | Normalización del Índice de Precios al Consumidor (CPI). |
+| `dim_countries` | Marts | Catálogo maestro de países con códigos ISO y nombres normalizados. |
+| `fact_financial_indicators` | Marts | Tabla de hechos que une inversiones BID con indicadores económicos. |
+| `mart_country_financial_risk` | Reporting | KPI de Riesgo Financiero por país basado en inversión vs volatilidad económica. |
+
 ## 🐍 Librerías Python Principales
 - `prefect`: Engine de orquestación.
 - `dbt-duckdb`: Integración de dbt con DuckDB/MotherDuck.
